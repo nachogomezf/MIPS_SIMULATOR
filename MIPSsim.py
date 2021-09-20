@@ -1,14 +1,21 @@
 def twoscomp(num):
-	if (num & (1 << 31)) != 0:
-		num = num - (1 <<32)
-	return num
+	l = list(num)
+	if l[0] == "1":
+		l = l[1:len(l)-1]
+		for x in range(len(l)):
+			if (l[x] == "0"):
+					l[x] = "1"
+			elif (l[x] == "1"):
+				l[x] = "0"
+		return -(int(''.join(l),2)+1)
+	else: return int(num,2)
 
 if __name__ == "__main__":
 	input = open("sample.txt","r")
-	sim = open("sample_simulation2.txt","w+")
-	dis = open("sample_disassembly2.txt","w+")
-	global pc
+	sim = open("simulation.txt","w+")
+	dis = open("disassembly.txt","w+")
 	pc=260
+	initialdata=[0]*16
 	linelist = input.readlines()
 	registers = [0]*32
 	data = [0]*16
@@ -16,13 +23,14 @@ if __name__ == "__main__":
 	i, j, k, l = 0, 0, 0, 0
 	while (linelist[j][:6] != "000110"):
 		j += 1
-	instructions = [None]*j
+	instructions = [None]*(j+1)
 	for k in range(16):
-		data[k] = twoscomp(int(linelist[j+1],2))
+		data[k] = twoscomp(linelist[j+1])
+		initialdata[k] = twoscomp(linelist[j+1])
 		j += 1
 	while (stop is False):
 		l += 1
-		if (linelist[i][:3] == "000"):
+		if (linelist[i][:3] == "000"): #	TYPE 1
 			if (linelist[i][3:6] == "000"): #	J INSTRUCTION
 				addr = int((linelist[i][7:32] + "00"),2)
 				instructions[i] = "\t%d J #%d\n" % (pc,addr)
@@ -31,7 +39,7 @@ if __name__ == "__main__":
 				addr = int((linelist[i][16:32] + "00"),2)
 				rs = int(linelist[i][6:11],2)
 				rd = int(linelist[i][11:16],2)
-				instructions[i] = "\t%d BEQ R%d R%d, #%d\n" % (pc,rs,rd,addr)
+				instructions[i] = "\t%d BEQ R%d, R%d, #%d\n" % (pc,rs,rd,addr)
 				if (registers[rs] == registers[rd]):
 					pc += addr+4
 				else:
@@ -44,32 +52,37 @@ if __name__ == "__main__":
 					pc += addr+4
 				else:
 					pc += 4
-				instructions[i] = "\t%d BNE R%d R%d, #%d\n" % (pc,rs,rd,addr)
+				instructions[i] = "\t%d BNE R%d, R%d, #%d\n" % (pc,rs,rd,addr)
 			elif (linelist[i][3:6] == "011"): #	BGTZ INSTRUCTION
 				addr = int((linelist[i][16:32] + "00"),2)
 				rs = int(linelist[i][6:11],2)
+				instructions[i] = "\t%d BGTZ R%d, #%d\n" % (pc,rs,addr)
 				if (registers[rs] > 0):
 					pc += addr+4
 				else:
 					pc += 4
-				instructions[i] = "\t%d BGTZ R%d, #%d\n" % (pc,rs,addr)
+				
 			elif (linelist[i][3:6] == "100"): #	SW INSTRUCTION
 				base = int(linelist[i][6:11],2)
 				rt = int(linelist[i][11:16],2)
 				offset = int(linelist[i][16:32],2)
-				data[(base+offset-316)//4]=registers[rt]
-				instructions[i] = "\t%d SW R%d, (%d)%d\n" % (pc,rt,offset,base)
+				data[(registers[base]+offset-316)//4]=registers[rt]
+				instructions[i] = "\t%d SW R%d, %d(R%d)\n" % (pc,rt,offset,base)
 				pc += 4
 			elif (linelist[i][3:6] == "101"): #	LW INSTRUCTION
 				base = int(linelist[i][6:11],2)
 				rt = int(linelist[i][11:16],2)
 				offset = int(linelist[i][16:32],2)
-				registers[rt]=data[(base+offset-316)//4]
-				instructions[i] = "\t%d LW R%d, (%d)%d\n" % (pc,rt,offset,base)
+				registers[rt]=data[(registers[base]+offset-316)//4]
+				instructions[i] = "\t%d LW R%d, %d(R%d)\n" % (pc,rt,offset,base)
 				pc += 4
-			elif (linelist[i][3:6] == "110"):
+			elif (linelist[i][3:6] == "110"): #	BREAK INSTRUCTION
 				stop = True
-				break
+				#pc += 4
+				i = (pc-260)//4
+				instructions[i] = "\t%d BREAK\n"%pc
+				#sim.write()
+				#break
 			else:
 				print("Unknown operation")
 		elif (linelist[i][:3] == "001"): #	CATEGORY-2 INSTRUCTIONS
@@ -104,7 +117,7 @@ if __name__ == "__main__":
 		elif (linelist[i][:3] == "010"):
 			dest = int(linelist[i][6:11],2)
 			src = int(linelist[i][11:16],2)
-			imm = twoscomp(int(linelist[i][16:32],2))
+			imm = twoscomp(linelist[i][16:32])
 			if (linelist[i][3:6] == "000"):
 				registers[dest] = registers[src] + imm
 				instructions[i] = "\t%d ADDI R%d, R%d, #%d\n"%(pc,dest,src,imm)
@@ -126,17 +139,24 @@ if __name__ == "__main__":
 			else:
 				sim.write("\nR%d:\t"%(a*8))
 			for b in range(8):
-				sim.write("%d\t"%registers[a*b])
+				sim.write("%d\t"%registers[a*8+b])
 		sim.write("\n\nData")
 		for a in range(2):
 			sim.write("\n%d:\t"%(316+32*a))
 			for b in range(8):
-				sim.write("%d\t"%data[a*b])
+				sim.write("%d\t"%data[a*8+b])
 		sim.write("\n\n")
 		i = (pc-260)//4
 	for i in range(0,len(instructions)):
-		dis.write(linelist[i]+instructions[i])
+		dis.write(linelist[i][:32]+instructions[i])
+	index = len(instructions)
+	k=0
+	while index < len(linelist):
+		pc += 4
+		dis.write(linelist[index][:32]+"\t%d %d\n"%(pc,initialdata[k]))
+		print(linelist[index][:32]+"\t%d %d\n"%(pc,initialdata[k]))
+		k+=1
+		index+=1
 	dis.close()
 	sim.close()
 	input.close()
-
