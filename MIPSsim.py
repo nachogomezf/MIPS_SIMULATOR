@@ -119,9 +119,12 @@ if __name__ == "__main__":
 			pc += 4
 		else:
 			print("Unkown intruction")
-		sim.write("--------------------\nCycle %d:%s\nRegisters\nR00:\t"%(l,instructions[i]))
+		sim.write("--------------------\nCycle %d:%s\nRegisters"%(l,instructions[i]))
 		for a in range(4):
-			sim.write("\nR0%d:\t"%a)
+			if (a<2):
+				sim.write("\nR0%d:\t"%(a*8))
+			else:
+				sim.write("\nR%d:\t"%(a*8))
 			for b in range(8):
 				sim.write("%d\t"%registers[a*b])
 		sim.write("\n\nData")
